@@ -1,0 +1,4 @@
+src/caffe/blob.cpp:4:10: fatal error: 'caffe/blob.hpp' file not found
+#include "caffe/blob.hpp"
+         ^~~~~~~~~~~~~~~~
+1 error generated.

@@ -1,0 +1,7 @@
+In file included from src/caffe/data_transformer.cpp:8:
+In file included from ./include/caffe/data_transformer.hpp:6:
+In file included from ./include/caffe/blob.hpp:8:
+./include/caffe/common.hpp:5:10: fatal error: 'gflags/gflags.h' file not found
+#include <gflags/gflags.h>
+         ^~~~~~~~~~~~~~~~~
+1 error generated.

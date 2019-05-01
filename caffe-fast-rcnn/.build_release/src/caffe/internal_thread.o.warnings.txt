@@ -1,0 +1,6 @@
+In file included from src/caffe/internal_thread.cpp:4:
+In file included from ./include/caffe/internal_thread.hpp:4:
+./include/caffe/common.hpp:5:10: fatal error: 'gflags/gflags.h' file not found
+#include <gflags/gflags.h>
+         ^~~~~~~~~~~~~~~~~
+1 error generated.
