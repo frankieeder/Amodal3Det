@@ -27,7 +27,7 @@ def get_context_rois(boxes):
 if __name__ == '__main__':
 
     # load training image list
-    nyu_data_path = osp.abspath('../../dataset/NYUV2')
+    nyu_data_path = osp.abspath('../dataset/NYUV2')
     with open(osp.join(nyu_data_path, 'test.txt')) as f:
         imlist = f.read().splitlines()
 
@@ -50,9 +50,9 @@ if __name__ == '__main__':
     k = get_NYU_intrinsic_matrix()
 
     #
-    matlab_path = osp.abspath('../../matlab/NYUV2')
+    matlab_path = osp.abspath('../matlab/NYUV2')
 
-    for im_name in imlist:
+    for im_name in imlist[:10]:
         print(im_name)
         data = {}
 
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     print("total images: {}".format(len(roidb)))
 
     # save training / test  data
-    cache_file = 'roidb_test_19.pkl'
+    cache_file = 'roidb_test_19_smol.pkl'
     with open(cache_file, 'wb') as fid:
         pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
         print('wrote ss roidb to {}'.format(cache_file))

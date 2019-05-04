@@ -1,24 +1,32 @@
 from model import *
 from weights import *
-from make_test_data import *
+from test import *
 import os.path as osp
 import pickle
+from keras.models import load_model
 
+SAVE_MODEL = False
+LOAD_MODEL = True
+model_dir = "deng_tensorflow.h5"
+cache_file = "roidb_test_19_smol.pkl"
 
-SAVE_MODEL = True
-tf_model = make_deng_tf_stucture()
-#tf_model = load_weights(tf_model)
-if SAVE_MODEL:
-    out_dir = "deng_tensorflow.h5"
-    tf_model.save(out_dir)
+# Define Model Structure
+if LOAD_MODEL:
+    tf_model = load_model(model_dir)
+else:
+    tf_model = make_deng_tf_stucture()
+    # tf_model = load_weights(tf_model)
+    if SAVE_MODEL:
+        tf_model.save(model_dir)
 
-cache_file = ""
+# Load Cached Test Data
 if osp.exists(cache_file):
     with open(cache_file, 'rb') as fid:
         roidb = pickle.load(fid)
     print('data is loaded from {}'.format(cache_file))
 len(roidb)
 
+# Test Network
 test_net(tf_model, roidb)
 
 

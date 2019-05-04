@@ -7,5 +7,5 @@ for i = 1 : 1449
    mask = (dmap_f > 10);
    dmap_f(mask) = 10;
    dmap_f = dmap_f/10*255;
-   save(fullfile(data_path, 'dmap_f', [num2str(i), '.mat']), 'dmap_f');
+   save(fullfile('dmap_f', [num2str(i), '.mat']), 'dmap_f');
 end
