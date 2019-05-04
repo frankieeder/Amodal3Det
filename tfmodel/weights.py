@@ -1,7 +1,6 @@
 import h5py
-weights_path = "My Drive/School/Spring 2019/bdd/Deng Tensorflow/pretrained/output/rgbd_det_iter_40000.h5"
-weights = h5py.File(weights_path, 'r')
-w = weights['data']
+weights_path = "/Users/frankeder/Google Drive/School/Spring 2019/bdd/Deng Tensorflow/pretrained/output/rgbd_det_iter_40000.h5"
+
 
 
 ## Helper functions to handle Caffe's H5 Shape
@@ -28,7 +27,9 @@ def restructure_weights_flip0(weights, layer):
     w[0] = np.swapaxes(w[0], 0, 1)
     return w
 
-def load_weights(model):
+def load_weights(model, weights_path):
+    weights = h5py.File(weights_path, 'r')
+    w = weights['data']
     unloaded = []
     for layer in model.layers:
         if layer.name in list(weights['data']):
