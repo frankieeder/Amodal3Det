@@ -1,7 +1,4 @@
 import h5py
-weights_path = "/Users/frankeder/Google Drive/School/Spring 2019/bdd/Deng Tensorflow/pretrained/output/rgbd_det_iter_40000.h5"
-
-
 
 ## Helper functions to handle Caffe's H5 Shape
 def h5_group_to_list(group):

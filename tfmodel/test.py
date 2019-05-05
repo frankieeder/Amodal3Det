@@ -166,22 +166,23 @@ def reshape_data(im, dmap, boxes, boxes_3d, rois_context):
     # print(net.get_layer('dmap').input_shape)
     # print(net.get_layer('rois').input_shape)
     # print(net.get_layer('rois_context').input_shape)
-    im_t = blobs['img'][0]
-    im_t = np.moveaxis(im_t, 0, 2)
+
+    #im_t = blobs['img']
+    blobs['img'] = np.moveaxis(blobs['img'], 1, 3)
     # im_t = cv2.resize(
     #    src=im_t,
     #    dsize=(224, 224)
     # )
-    blobs['img'] = np.expand_dims(im_t, 0)
+    #blobs['img'] = np.expand_dims(im_t, 0)
     print(blobs['img'].shape)
 
     dmap_t = blobs['dmap']
-    dmap_t = np.moveaxis(dmap_t, 0, 2)
+    blobs['dmap'] = np.moveaxis(blobs['dmap'], 1, 3)
     # dmap_t = cv2.resize(
     #    src=dmap_t,
     #    dsize=(224, 224)
     # )
-    blobs['dmap'] = np.expand_dims(dmap_t, 0)
+    #blobs['dmap'] = np.expand_dims(dmap_t, 0)
 
     print(blobs['rois'])
     print(all(blobs['rois'][:, 0] == 0))
