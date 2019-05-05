@@ -10,6 +10,7 @@ from keras.optimizers import SGD
 from keras import backend as K
 from keras.engine.topology import Layer
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
 
 class RoiPoolingConv(Layer):
@@ -58,10 +59,10 @@ class RoiPoolingConv(Layer):
         outputs = []
 
         for roi_idx in range(self.num_rois):
-            x = rois[0, roi_idx, 0] / SCALE_FACTOR
-            y = rois[0, roi_idx, 1] / SCALE_FACTOR
-            w = rois[0, roi_idx, 2] / SCALE_FACTOR
-            h = rois[0, roi_idx, 3] / SCALE_FACTOR
+            x = rois[0, roi_idx, 0] * SCALE_FACTOR
+            y = rois[0, roi_idx, 1] * SCALE_FACTOR
+            w = rois[0, roi_idx, 2] * SCALE_FACTOR
+            h = rois[0, roi_idx, 3] * SCALE_FACTOR
 
             x = K.cast(x, 'int32')
             y = K.cast(y, 'int32')
@@ -203,6 +204,10 @@ def VGG_16_D(dmap):
 
 
 def make_deng_tf_stucture():
+    sess = K.get_session()
+    #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    K.set_session(sess)
+
     # TODO: Check shape of these
     ## Inputs
     img = Input(shape=(427, 561, 3), name='img')
