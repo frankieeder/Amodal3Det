@@ -204,17 +204,21 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
 
     outs = []
     c = 0
+    _subtimer = Timer()
     for roi, roi_context in zip(rois, rois_context):
         print(f"Testing ROI {c}")
+        _subtimer.tic()
         blobs_out = net.predict([
             im_in,
             dmap_in,
             rois,
             rois_context
         ])
+        _subtimer.toc()
         outs.append(blobs_out)
         c += 1
 
+    print(f"Average Time per ROI: {_subtimer.average_time}")
     # use softmax estimated probabilities
     scores = np.concatenate([b[0] for b in outs])
 
