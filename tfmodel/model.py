@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from keras.layers import Flatten, Dense, Dropout
 from keras.layers import Input, BatchNormalization, Concatenate
-from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D
+from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, Lambda
 from keras.models import Sequential, Model
 from keras.utils import plot_model
 from keras.utils.conv_utils import convert_kernel
@@ -14,28 +14,10 @@ from tensorflow.python import debug as tf_debug
 
 
 class RoiPoolingConv(Layer):
-    '''ROI pooling layer for 2D inputs.
-    See Spatial Pyramid Pooling in Deep Convolutional Networks for Visual Recognition,
-    K. He, X. Zhang, S. Ren, J. Sun
-    # Arguments
-        pool_size: int
-            Size of pooling region to use. pool_size = 7 will result in a 7x7 region.
-        num_rois: number of regions of interest to be used
-    # Input shape
-        list of two 4D tensors [X_img,X_roi] with shape:
-        X_img:
-        `(1, rows, cols, channels)`
-        X_roi:
-        `(1,num_rois,4)` list of rois, with ordering (x,y,w,h)
-    # Output shape
-        3D tensor with shape:
-        `(1, num_rois, channels, pool_size, pool_size)`
-    '''
-
-    def __init__(self, pool_size, num_rois, **kwargs):
+    def __init__(self, pool_size, scale_factor=1.0, **kwargs):
         self.dim_ordering = K.image_dim_ordering()
         self.pool_size = pool_size
-        self.num_rois = num_rois
+        self.scale_factor = scale_factor
 
         super(RoiPoolingConv, self).__init__(**kwargs)
 
@@ -43,47 +25,34 @@ class RoiPoolingConv(Layer):
         self.nb_channels = input_shape[0][3]
 
     def compute_output_shape(self, input_shape):
-        return None, self.num_rois, self.pool_size, self.pool_size, self.nb_channels
+        return (None,) + self.pool_size + (self.nb_channels,)
 
     def call(self, x, mask=None):
         assert (len(x) == 2)
-        SCALE_FACTOR = 1 / 16
-        # x[0] is image with shape (rows, cols, channels)
         img = x[0]
-
-        # x[1] is roi with shape (num_rois,4) with ordering (x,y,w,h)
         rois = x[1]
+        rois_norm = K.cast(rois * self.scale_factor, 'int32')
+        rois_norm = K.cast(rois_norm, 'float32')
 
-        input_shape = K.shape(img)
-
-        outputs = []
-
-        for roi_idx in range(self.num_rois):
-            x = rois[0, roi_idx, 0] * SCALE_FACTOR
-            y = rois[0, roi_idx, 1] * SCALE_FACTOR
-            w = rois[0, roi_idx, 2] * SCALE_FACTOR
-            h = rois[0, roi_idx, 3] * SCALE_FACTOR
-
-            x = K.cast(x, 'int32')
-            y = K.cast(y, 'int32')
-            w = K.cast(w, 'int32')
-            h = K.cast(h, 'int32')
+        def roi_cords_to_pooled(roi):
+            x = K.cast(roi[0], 'int32')
+            y = K.cast(roi[1], 'int32')
+            w = K.cast(roi[2], 'int32')
+            h = K.cast(roi[3], 'int32')
 
             # Resized roi of the image to pooling size (7x7)
-            section = img[:, y:y + h, x:x + w, :]
-            print(section)
-            rs = tf.image.resize_images(section, (self.pool_size, self.pool_size))
-            outputs.append(rs)
+            section = tf.image.crop_to_bounding_box(img, y, x, h + 1, w + 1)  # TODO: Axis order might be backwards
+            rs = tf.image.resize_images(section, self.pool_size)  # TODO: This doesn't seem to be max pooling...
+            return rs
 
-        final_output = K.concatenate(outputs, axis=0)
+        final_output = tf.map_fn(
+            fn=roi_cords_to_pooled,
+            elems=rois_norm
+        )
+        final_output = final_output[:, 0, :, :, :]  # TODO: Might be keeping the wrong axis
+        final_output = K.cast(final_output, 'float32')
 
-        # Reshape to (1, num_rois, pool_size, pool_size, nb_channels)
-        # Might be (1, 4, 7, 7, 3)
-        final_output = K.reshape(final_output, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
-
-        # permute_dimensions is similar to transpose
-        final_output = K.permute_dimensions(final_output, (0, 1, 2, 3, 4))
-
+        #final_output = K.constant(0.0, shape=self.pool_size + (self.nb_channels,))  # Null output for testing
         return final_output
 
     def get_config(self):
@@ -92,19 +61,6 @@ class RoiPoolingConv(Layer):
         base_config = super(RoiPoolingConv, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-
-"""class RoiPoolingConvContext(RoiPoolingConv):
-    def call(self, x, mask=None):
-        CONTEXT_SCALE = 1.5
-        rois = x[1]
-        lower_left = np.array(rois[:2])
-        box_dims = np.array(rois[2:])
-        centroid = lower_left + box_dims / 2
-        new_lower_left = centroid - (box_dims * CONTEXT_SCALE / 2)
-        new_box_dims = box_dims * CONTEXT_SCALE
-        new_rois = np.array([*new_lower_left, *new_box_dims])
-        x[1] = new_rois
-        RoiPoolingConv.call(self, x, mask)"""
 
 
 def VGG_16_RGB(img):
@@ -202,13 +158,56 @@ def VGG_16_D(dmap):
 
     return bn_conv5_3d
 
+def ROI_Pool_Keras(**kwargs):
+    return Lambda(lambda l: ROI_Pool_TF(*l), **kwargs)
+
+def ROI_Pool_TF(img, rois, pool_size=(7, 7), scale_factor=(1/16)):
+    '''ROI pooling layer for 2D inputs.
+    See Spatial Pyramid Pooling in Deep Convolutional Networks for Visual Recognition,
+    K. He, X. Zhang, S. Ren, J. Sun
+    # Arguments
+        pool_size: int
+            Size of pooling region to use. pool_size = 7 will result in a 7x7 region.
+        DEPRECATED: num_rois: number of regions of interest to be used
+    # Input shape
+        list of two 4D tensors [X_img,X_roi] with shape:
+        X_img:
+        `(1, rows, cols, channels)`
+        X_roi:
+        `(num_rois, 4)` list of rois, with ordering (x,y,w,h)
+    # Output shape
+        3D tensor with shape:
+        `(num_rois, channels, pool_size, pool_size)`
+    '''
+    rois_norm = K.cast(rois * scale_factor, 'int32')
+    rois_norm = K.cast(rois_norm, 'float32')
+    def roi_cords_to_pooled(roi):
+        x = K.cast(roi[0], 'int32')
+        y = K.cast(roi[1], 'int32')
+        w = K.cast(roi[2], 'int32')
+        h = K.cast(roi[3], 'int32')
+
+        # Resized roi of the image to pooling size (7x7)
+        section = tf.image.crop_to_bounding_box(img, y, x, h+1, w+1)  # TODO: Axis order might be backwards
+        rs = tf.image.resize_images(section, pool_size)  # TODO: This doesn't seem to be max pooling...
+        return rs
+
+    final_output = tf.map_fn(
+        fn=roi_cords_to_pooled,
+        elems=rois_norm
+    )
+    final_output = final_output[:, 0, :, :, :]  # TODO: Might be keeping the wrong axis
+    final_output = K.cast(final_output, 'float32')
+    return final_output
+
+
+
 
 def make_deng_tf_stucture():
     sess = K.get_session()
     #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     K.set_session(sess)
 
-    # TODO: Check shape of these
     ## Inputs
     img = Input(shape=(427, 561, 3), name='img')
     dmap = Input(shape=(427, 561, 3), name='dmap')
@@ -225,6 +224,26 @@ def make_deng_tf_stucture():
 
     #### ROI Pooling
     pool5 = RoiPoolingConv(
+        pool_size=(7, 7),
+        scale_factor=(1 / 16),
+        name="pool5"
+    )([bn_conv5_3, rois])
+    pool5_context = RoiPoolingConv(
+        pool_size=(7, 7),
+        scale_factor=(1 / 16),
+        name="pool5_context"
+    )([bn_conv5_3, rois_context])
+    pool5d = RoiPoolingConv(
+        pool_size=(7, 7),
+        scale_factor=(1 / 16),
+        name="pool5d"
+    )([bn_conv5_3d, rois])
+    pool5d_context = RoiPoolingConv(
+        pool_size=(7, 7),
+        scale_factor=(1 / 16),
+        name="pool5d_context"
+    )([bn_conv5_3d, rois_context])
+    """pool5 = RoiPoolingConv(
         pooling_regions,
         num_rois,
         name="pool5"
@@ -243,7 +262,7 @@ def make_deng_tf_stucture():
         pooling_regions,
         num_rois,
         name="pool5d_context"
-    )([bn_conv5_3d, rois_context])
+    )([bn_conv5_3d, rois_context])"""
 
     #### Flatten
     flatten = Flatten(name='flatten')(pool5)
@@ -301,11 +320,7 @@ def make_deng_tf_stucture():
     )
     return tf_model
 
-if __name__ == "main":
-    tf_model = make_deng_tf_stucture()
-    print("Model Summary:")
-    print(tf_model.summary())
-    plot_model(tf_model, show_shapes=True, show_layer_names=True, to_file='model.png')
+
 
 
 
