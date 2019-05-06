@@ -16,8 +16,10 @@ weights_path = "../pretrained/output/rgbd_det_iter_40000.h5"
 if LOAD_MODEL:
     tf_model = load_model(model_dir)
 else:
+    print("Making Structure")
     tf_model = make_deng_tf_stucture()
-    # tf_model = load_weights(tf_model, weights_path)
+    print("Loading Weights")
+    #tf_model = load_weights(tf_model, weights_path)
     if SAVE_MODEL:
         tf_model.save(model_dir)
 
@@ -26,7 +28,7 @@ if osp.exists(cache_file):
     with open(cache_file, 'rb') as fid:
         roidb = pickle.load(fid)
     print('data is loaded from {}'.format(cache_file))
-len(roidb)
+print(len(roidb))
 
 # Test Network
 test_net(tf_model, roidb)

@@ -1,4 +1,5 @@
 import h5py
+import numpy as np
 
 ## Helper functions to handle Caffe's H5 Shape
 def h5_group_to_list(group):

@@ -139,7 +139,14 @@ def _bbox_pred_3d(bbox_3d, box_deltas_3d):
     return pred_boxes_3d
 
 
-def reshape_data(im, dmap, boxes, boxes_3d, rois_context):
+def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
+    """  predict bbox and class scores
+        bbox: N x 4 [xmin, ymin, xmax, ymax]
+        bbox_3d : N x (n_cls * 7)
+        return: scores: N x n_cls
+                pred_boxes: N x (n_cls*4) [xmin, ymin, xmax, ymax]
+                pred_boxes_3d: N x (n_cls*7)
+    """
     # construct blobs
     blobs = {'img': None, 'dmap': None, 'rois': None}
     blobs['img'] = _get_image_blob(im)
@@ -167,13 +174,13 @@ def reshape_data(im, dmap, boxes, boxes_3d, rois_context):
     # print(net.get_layer('rois').input_shape)
     # print(net.get_layer('rois_context').input_shape)
 
-    #im_t = blobs['img']
+    # im_t = blobs['img']
     blobs['img'] = np.moveaxis(blobs['img'], 1, 3)
     # im_t = cv2.resize(
     #    src=im_t,
     #    dsize=(224, 224)
     # )
-    #blobs['img'] = np.expand_dims(im_t, 0)
+    # blobs['img'] = np.expand_dims(im_t, 0)
     print(blobs['img'].shape)
 
     dmap_t = blobs['dmap']
@@ -182,14 +189,8 @@ def reshape_data(im, dmap, boxes, boxes_3d, rois_context):
     #    src=dmap_t,
     #    dsize=(224, 224)
     # )
-    #blobs['dmap'] = np.expand_dims(dmap_t, 0)
+    # blobs['dmap'] = np.expand_dims(dmap_t, 0)
 
-    print(blobs['rois'])
-    print(all(blobs['rois'][:, 0] == 0))
-    blobs['rois'] = np.expand_dims(blobs['rois'][:1, 1:], 0)
-    print(blobs['rois'].shape)
-    blobs['rois_context'] = np.expand_dims(blobs['rois_context'][:1, 1:], 0)
-    print(blobs['rois_context'])
     # net.blobs['img'].reshape(*(blobs['img'].shape))
     # net.blobs['dmap'].reshape(*(blobs['dmap'].shape))
     # net.blobs['rois'].reshape(*(blobs['rois'].shape))
@@ -200,28 +201,9 @@ def reshape_data(im, dmap, boxes, boxes_3d, rois_context):
     dmap_in = blobs['dmap'].astype(np.float32, copy=False)
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
-    return im_in, dmap_in, rois, rois_context
 
 
-def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
-    """  predict bbox and class scores
-        bbox: N x 4 [xmin, ymin, xmax, ymax]
-        bbox_3d : N x (n_cls * 7)
-        return: scores: N x n_cls
-                pred_boxes: N x (n_cls*4) [xmin, ymin, xmax, ymax]
-                pred_boxes_3d: N x (n_cls*7)
-    """
-    im_in, dmap_in, rois, rois_context = reshape_data(
-        im,
-        dmap,
-        boxes,
-        boxes_3d,
-        rois_context
-    )
-    print(im_in.shape)
-    print(dmap_in.shape)
-    print(rois)
-    print(rois_context)
+    print("Testing...")
     blobs_out = net.predict([
         im_in,
         dmap_in,
@@ -229,12 +211,13 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
         rois_context
     ])
 
+
     # use softmax estimated probabilities
-    scores = blobs_out['cls_prob']
+    scores = blobs_out[0]
 
     """ Apply bounding-box regression deltas """
     # 3d boxes
-    box_deltas_3d = blobs_out['bbox_pred_3d']
+    box_deltas_3d = blobs_out[1]
     pred_boxes_3d = _bbox_pred_3d(boxes_3d, box_deltas_3d)
 
     #  2d boxes
