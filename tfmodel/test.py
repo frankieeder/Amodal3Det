@@ -216,15 +216,15 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
         c += 1
 
     # use softmax estimated probabilities
-    scores = blobs_out[0]
+    scores = np.concatenate([b[0] for b in outs])
 
     """ Apply bounding-box regression deltas """
     # 3d boxes
-    box_deltas_3d = blobs_out[1]
+    box_deltas_3d = scores = np.concatenate([b[1] for b in outs])
     pred_boxes_3d = _bbox_pred_3d(boxes_3d, box_deltas_3d)
 
     #  2d boxes
-    box_deltas = np.zeros((box_deltas_3d.shape[0], box_deltas_3d.shape[1] / 7 * 4))
+    box_deltas = np.zeros((box_deltas_3d.shape[0], int(box_deltas_3d.shape[1] / 7 * 4)))
     pred_boxes = _bbox_pred(boxes, box_deltas)
 
     if cfg.DEDUP_BOXES > 0:
