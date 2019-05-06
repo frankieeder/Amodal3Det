@@ -212,8 +212,8 @@ def make_deng_tf_stucture():
     ## Inputs
     img = Input(shape=(427, 561, 3), name='img')
     dmap = Input(shape=(427, 561, 3), name='dmap')
-    rois = Input(shape=(None, 4), name='rois')
-    rois_context = Input(shape=(None, 4), name='rois_context')
+    rois = Input(shape=(5,), name='rois')
+    rois_context = Input(shape=(5,), name='rois_context')
 
     bn_conv5_3 = VGG_16_RGB(img)
     bn_conv5_3d = VGG_16_D(dmap)
