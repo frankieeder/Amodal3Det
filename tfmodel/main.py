@@ -20,7 +20,7 @@ else:
     print("Making Structure")
     tf_model = make_deng_tf_stucture()
     print("Loading Weights")
-    #tf_model = load_weights(tf_model, weights_path)
+    tf_model = load_weights(tf_model, weights_path)
     if SAVE_MODEL:
         tf_model.save(model_dir)
 

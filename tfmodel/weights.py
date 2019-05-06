@@ -32,12 +32,12 @@ def load_weights(model, weights_path):
     for layer in model.layers:
         if layer.name in list(weights['data']):
             print(f"loading {layer.name}")
-            if layer.name[:4] == 'conv' and "conv" in layer.name: # Load Normal Conv Weights
+            if layer.name[:4] == 'conv' and "conv" in layer.name:  # Load Normal Conv Weights
                 these_weights = restructure_weights_conv(w, layer.name)
                 layer.set_weights(these_weights)
-            elif layer.name[:2] == 'bn' and "conv" in layer.name:
+                """elif layer.name[:2] == 'bn' and "conv" in layer.name:
                 these_weights = restructure_weights_bn(w, layer.name)
-                layer.set_weights(these_weights)
+                layer.set_weights(these_weights)"""
             elif layer.name == "fc7":
                 layer.set_weights(h5_group_to_list(w[layer.name]))
             elif layer.name in ["fc6", "cls_score", "bbox_pred_3d"]:

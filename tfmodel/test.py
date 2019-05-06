@@ -202,15 +202,18 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-
-    print("Testing...")
-    blobs_out = net.predict([
-        im_in,
-        dmap_in,
-        rois,
-        rois_context
-    ])
-
+    outs = []
+    c = 0
+    for roi, roi_context in zip(rois, rois_context):
+        print(f"Testing ROI {c}")
+        blobs_out = net.predict([
+            im_in,
+            dmap_in,
+            rois,
+            rois_context
+        ])
+        outs.append(blobs_out)
+        c += 1
 
     # use softmax estimated probabilities
     scores = blobs_out[0]

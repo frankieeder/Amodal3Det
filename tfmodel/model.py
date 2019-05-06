@@ -49,7 +49,7 @@ class RoiPoolingConv(Layer):
             fn=roi_cords_to_pooled,
             elems=rois_norm
         )
-        final_output = final_output[:, 0, :, :, :]  # TODO: Might be keeping the wrong axis
+        final_output = final_output[0, :, :, :, :]  # TODO: Might be keeping the wrong axis
         final_output = K.cast(final_output, 'float32')
 
         #final_output = K.constant(0.0, shape=self.pool_size + (self.nb_channels,))  # Null output for testing
