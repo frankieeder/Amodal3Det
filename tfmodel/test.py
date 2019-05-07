@@ -6,6 +6,7 @@ import heapq
 from timer import Timer
 import pickle
 import os
+import keras.backend as K
 
 
 def _get_image_blob(im):
@@ -141,7 +142,7 @@ def _bbox_pred_3d(bbox_3d, box_deltas_3d):
     return pred_boxes_3d
 
 
-def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
+def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
     """  predict bbox and class scores
         bbox: N x 4 [xmin, ymin, xmax, ymax]
         bbox_3d : N x (n_cls * 7)
@@ -171,10 +172,10 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
         blobs['rois_context'] = blobs['rois_context'][index, :]
 
     # reshape network inputs
-    # print(net.get_layer('img').input_shape)
-    # print(net.get_layer('dmap').input_shape)
-    # print(net.get_layer('rois').input_shape)
-    # print(net.get_layer('rois_context').input_shape)
+    # print(model.get_layer('img').input_shape)
+    # print(model.get_layer('dmap').input_shape)
+    # print(model.get_layer('rois').input_shape)
+    # print(model.get_layer('rois_context').input_shape)
 
     # im_t = blobs['img']
     blobs['img'] = np.moveaxis(blobs['img'], 1, 3)
@@ -193,10 +194,10 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
     # )
     # blobs['dmap'] = np.expand_dims(dmap_t, 0)
 
-    # net.blobs['img'].reshape(*(blobs['img'].shape))
-    # net.blobs['dmap'].reshape(*(blobs['dmap'].shape))
-    # net.blobs['rois'].reshape(*(blobs['rois'].shape))
-    # net.blobs['rois_context'].reshape(*(blobs['rois_context'].shape))
+    # model.blobs['img'].reshape(*(blobs['img'].shape))
+    # model.blobs['dmap'].reshape(*(blobs['dmap'].shape))
+    # model.blobs['rois'].reshape(*(blobs['rois'].shape))
+    # model.blobs['rois_context'].reshape(*(blobs['rois_context'].shape))
 
     # forward pass for predictions
     im_in = blobs['img'].astype(np.float32, copy=False)
@@ -204,7 +205,7 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-    test_results_pkl = 'outs.pickle'
+    test_results_pkl = 'null.pickle'
     if os.path.isfile(test_results_pkl):
         with open(test_results_pkl, 'rb') as handle:
             outs = pickle.load(handle)
@@ -214,13 +215,18 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
         _subtimer = Timer()
         for roi, roi_context in zip(rois, rois_context):
             print(f"Testing ROI {c}")
+            ins = [im_in, dmap_in, rois, rois_context]
+            """inp = model.input  # input placeholder
+            outputs = [layer.output for layer in model.layers if layer.name not in ['img', 'dmap', 'rois', 'rois_context']]  # all layer outputs
+            functor = K.function(inp + [K.learning_phase()], outputs)  # evaluation function
+
+            # Testing
+            
+            layer_outs = functor(ins +[1.])
+            print(layer_outs)"""
+
             _subtimer.tic()
-            blobs_out = net.predict([
-                im_in,
-                dmap_in,
-                rois,
-                rois_context
-            ])
+            blobs_out = model.predict(ins)
             _subtimer.toc()
             outs.append(blobs_out)
             print(f"Average Time per ROI so far: {_subtimer.average_time}")
@@ -249,6 +255,7 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
 
 def test_net(net, roidb):
     """Test a network on an image database."""
+    #roidb = roidb[1:]
     num_images = len(roidb)
     num_classes = len(cfg.classes)
     # heuristic: keep an average of 40 detections per class per images prior

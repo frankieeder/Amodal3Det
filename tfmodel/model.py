@@ -30,18 +30,20 @@ class RoiPoolingConv(Layer):
     def call(self, x, mask=None):
         assert (len(x) == 2)
         img = x[0]
+        tf.print(img)
         rois = x[1]
+        tf.print(rois)
         rois_norm = K.cast(rois * self.scale_factor, 'int32')
         rois_norm = K.cast(rois_norm, 'float32')
 
         def roi_cords_to_pooled(roi):
             x = K.cast(roi[0], 'int32')
             y = K.cast(roi[1], 'int32')
-            w = K.cast(roi[2], 'int32')
-            h = K.cast(roi[3], 'int32')
+            w = K.cast(roi[2], 'int32') - x
+            h = K.cast(roi[3], 'int32') - y
 
             # Resized roi of the image to pooling size (7x7)
-            section = tf.image.crop_to_bounding_box(img, y, x, h + 1, w + 1)  # TODO: Axis order might be backwards
+            section = tf.image.crop_to_bounding_box(img, y, x, h+1, w+1)  # TODO: Axis order might be backwards
             rs = tf.image.resize_images(section, self.pool_size)  # TODO: This doesn't seem to be max pooling...
             return rs
 
@@ -50,6 +52,7 @@ class RoiPoolingConv(Layer):
             elems=rois_norm
         )
         final_output = final_output[0, :, :, :, :]  # TODO: Might be keeping the wrong axis
+        tf.print()
         final_output = K.cast(final_output, 'float32')
 
         #final_output = K.constant(0.0, shape=self.pool_size + (self.nb_channels,))  # Null output for testing
@@ -184,8 +187,8 @@ def ROI_Pool_TF(img, rois, pool_size=(7, 7), scale_factor=(1/16)):
     def roi_cords_to_pooled(roi):
         x = K.cast(roi[0], 'int32')
         y = K.cast(roi[1], 'int32')
-        w = K.cast(roi[2], 'int32')
-        h = K.cast(roi[3], 'int32')
+        w = K.cast(roi[2], 'int32') - x
+        h = K.cast(roi[3], 'int32') - y
 
         # Resized roi of the image to pooling size (7x7)
         section = tf.image.crop_to_bounding_box(img, y, x, h+1, w+1)  # TODO: Axis order might be backwards
@@ -199,6 +202,9 @@ def ROI_Pool_TF(img, rois, pool_size=(7, 7), scale_factor=(1/16)):
     final_output = final_output[:, 0, :, :, :]  # TODO: Might be keeping the wrong axis
     final_output = K.cast(final_output, 'float32')
     return final_output
+
+def ROI_Pool_For_Lambda(pool_size=(7, 7), scale_factor=(1/16)):
+    pass
 
 
 
@@ -313,11 +319,25 @@ def make_deng_tf_stucture():
     )(fc7)
 
     ## Model Setup
-    ####
-    tf_model = Model(
-        inputs=[img, dmap, rois, rois_context],
-        outputs=[cls_score, bbox_pred_3d]
-    )
+    ALL_LAYERS = True
+    ins = [img, dmap, rois, rois_context]
+    if ALL_LAYERS:
+        tf_model = Model(
+            inputs=ins,
+            outputs=[cls_score, bbox_pred_3d]
+        )
+        all_layers = [layer for layer in tf_model.layers if not any(n in layer.name for n in ['img', 'dmap', 'rois', 'rois_context', 'padding'])]
+        all_outs = [l.output for l in all_layers]
+        reference_names = [l.name for l in all_layers]
+        tf_model = Model(
+            input=ins,
+            outputs=all_outs
+        )
+    else:
+        tf_model = Model(
+            inputs=ins,
+            outputs=[cls_score, bbox_pred_3d]
+        )
     return tf_model
 
 
