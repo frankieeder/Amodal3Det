@@ -202,23 +202,28 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
+
     outs = []
     c = 0
     _subtimer = Timer()
     for roi, roi_context in zip(rois, rois_context):
-        print(f"Testing ROI {c}")
+        print(f"Testing ROI number {c}")
         _subtimer.tic()
-        blobs_out = net.predict([
-            im_in,
-            dmap_in,
-            rois,
-            rois_context
-        ])
+        blobs_out = net.predict(
+            [
+                im_in,
+                dmap_in,
+                roi,
+                roi_context
+            ],
+            batch_size=1,
+            verbose=1
+        )
         _subtimer.toc()
-        outs.append(blobs_out)
+        print(f"Average time per ROI so far: {_subtimer.average_time}")
         c += 1
 
-    print(f"Average Time per ROI: {_subtimer.average_time}")
+
     # use softmax estimated probabilities
     scores = np.concatenate([b[0] for b in outs])
 
