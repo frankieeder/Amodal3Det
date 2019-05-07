@@ -4,6 +4,8 @@ import cv2
 import scipy.io as sio
 import heapq
 from timer import Timer
+import pickle
+import os
 
 
 def _get_image_blob(im):
@@ -202,34 +204,34 @@ def im_detect_3d(net, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-
-    outs = []
-    c = 0
-    _subtimer = Timer()
-    for roi, roi_context in zip(rois, rois_context):
-        print(f"Testing ROI number {c}")
-        _subtimer.tic()
-        blobs_out = net.predict(
-            [
+    test_results_pkl = 'outs.pickle'
+    if os.path.isfile(test_results_pkl):
+        with open(test_results_pkl, 'rb') as handle:
+            outs = pickle.load(handle)
+    else:
+        outs = []
+        c = 0
+        _subtimer = Timer()
+        for roi, roi_context in zip(rois, rois_context):
+            print(f"Testing ROI {c}")
+            _subtimer.tic()
+            blobs_out = net.predict([
                 im_in,
                 dmap_in,
-                roi,
-                roi_context
-            ],
-            batch_size=1,
-            verbose=1
-        )
-        _subtimer.toc()
-        print(f"Average time per ROI so far: {_subtimer.average_time}")
-        c += 1
-
+                rois,
+                rois_context
+            ])
+            _subtimer.toc()
+            outs.append(blobs_out)
+            print(f"Average Time per ROI so far: {_subtimer.average_time}")
+            c += 1
 
     # use softmax estimated probabilities
     scores = np.concatenate([b[0] for b in outs])
 
     """ Apply bounding-box regression deltas """
     # 3d boxes
-    box_deltas_3d = scores = np.concatenate([b[1] for b in outs])
+    box_deltas_3d = np.concatenate([b[1] for b in outs])
     pred_boxes_3d = _bbox_pred_3d(boxes_3d, box_deltas_3d)
 
     #  2d boxes
