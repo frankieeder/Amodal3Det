@@ -8,8 +8,8 @@ def h5_group_to_list(group):
 
 def restructure_weights_conv(weights, layer):
     w = h5_group_to_list(weights[layer])
-    w[0] = np.swapaxes(w[0], 0, 3)
-    w[0] = np.swapaxes(w[0], 1, 2)
+    w[0] = np.moveaxis(w[0], 0, 3)
+    w[0] = np.moveaxis(w[0], 0, 2)
     return w
 
 
@@ -49,8 +49,8 @@ def load_weights(model, weights_path):
                 layer.set_weights(these_weights)
             else:
                 unloaded.append(layer.name)
-            print(f"loaded {layer.name}")
         else: # No data from Deng weights...
             unloaded.append(layer.name)
+    print(unloaded)
     return model
 

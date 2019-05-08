@@ -328,7 +328,8 @@ def make_deng_tf_stucture():
         )
         all_layers = [layer for layer in tf_model.layers if not any(n in layer.name for n in ['img', 'dmap', 'rois', 'rois_context', 'padding'])]
         all_outs = [l.output for l in all_layers]
-        reference_names = [l.name for l in all_layers]
+        reference_names = [(i, l.name) for i, l in enumerate(all_layers)]
+        print(f"Layer names by output, for reference:\n{reference_names}")
         tf_model = Model(
             input=ins,
             outputs=all_outs

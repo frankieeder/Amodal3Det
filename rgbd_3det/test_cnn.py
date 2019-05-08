@@ -4,7 +4,7 @@
 
    test a network on dataset
 """
-import _init_paths
+import _init_p aths
 import caffe
 import os.path as osp
 import cPickle
