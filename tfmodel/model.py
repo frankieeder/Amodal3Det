@@ -81,7 +81,7 @@ def VGG_16_RGB(img):
 
     padding3_1 = ZeroPadding2D((1, 1), name='padding3_1')(pool2)
     conv3_1 = Conv2D(256, (3, 3), activation='relu', name='conv3_1')(padding3_1)
-    bn_conv3_1 = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv3_1')(conv3_1)
+    bn_conv3_1 = BatchNormalization(center=True, scale=True, name='bn_conv3_1')(conv3_1)
     padding3_2 = ZeroPadding2D((1, 1), name='padding3_2')(bn_conv3_1)
     conv3_2 = Conv2D(256, (3, 3), activation='relu', name='conv3_2')(padding3_2)
     bn_conv3_2 = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv3_2')(conv3_2)
