@@ -17,7 +17,7 @@ def restructure_weights_bn(weights, layer):
     bn_w = h5_group_to_list(weights[layer])
     scale_factor = bn_w[2][0]
     scale_factor = 0 if scale_factor == 0 else 1 / scale_factor
-    mean = scale_factor * bn_w[0]
+    mean = -scale_factor * bn_w[0]
     std = scale_factor * bn_w[1]
     sc = 'sc' + layer[2:]
     sc_w = h5_group_to_list(weights[sc])
