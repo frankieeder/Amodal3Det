@@ -7,6 +7,7 @@ from timer import Timer
 import pickle
 import os
 import keras.backend as K
+import tensorflow as tf
 
 
 def _get_image_blob(im):
@@ -205,32 +206,18 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-    test_results_pkl = 'null.pickle'
+    test_results_pkl = 'null.pickle'  # Use this if you want to test a set of raw model predictions to completion.
     if os.path.isfile(test_results_pkl):
         with open(test_results_pkl, 'rb') as handle:
             outs = pickle.load(handle)
     else:
-        outs = []
-        c = 0
         _subtimer = Timer()
-        for roi, roi_context in zip(rois, rois_context):
-            print(f"Testing ROI {c}")
-            ins = [im_in, dmap_in, rois, rois_context]
-            """inp = model.input  # input placeholder
-            outputs = [layer.output for layer in model.layers if layer.name not in ['img', 'dmap', 'rois', 'rois_context']]  # all layer outputs
-            functor = K.function(inp + [K.learning_phase()], outputs)  # evaluation function
-
-            # Testing
-            
-            layer_outs = functor(ins +[1.])
-            print(layer_outs)"""
-
-            _subtimer.tic()
-            blobs_out = model.predict(ins)
-            _subtimer.toc()
-            outs.append(blobs_out)
-            print(f"Average Time per ROI so far: {_subtimer.average_time}")
-            c += 1
+        ins = [im_in, dmap_in, rois, rois_context]
+        _subtimer.tic()
+        blobs_out = model.predict(ins)
+        _subtimer.toc()
+        print(f"This Iteration Test Time: {_subtimer.average_time}")
+        pass
 
     # use softmax estimated probabilities
     scores = np.concatenate([b[0] for b in outs])

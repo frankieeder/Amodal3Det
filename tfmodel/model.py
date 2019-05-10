@@ -28,26 +28,23 @@ class RoiPoolingConv(Layer):
     def call(self, x, mask=None):
         assert (len(x) == 2)
         img = x[0]
-        tf.print(img)
         rois = x[1]
-        tf.print(rois)
-        rois_norm = K.cast(rois * self.scale_factor, 'int32')
-        rois_norm = K.cast(rois_norm, 'float32')
 
         def roi_cords_to_pooled(roi):
-            x = K.cast(roi[0], 'int32')
-            y = K.cast(roi[1], 'int32')
-            w = K.cast(roi[2], 'int32') - x
-            h = K.cast(roi[3], 'int32') - y
+            roi *= self.scale_factor
+            x_min = K.cast(tf.math.round(roi[1]), 'int32')
+            y_min = K.cast(tf.math.round(roi[2]), 'int32')
+            x_max = K.cast(tf.math.round(roi[3]), 'int32')
+            y_max = K.cast(tf.math.round(roi[4]), 'int32')
 
             # Resized roi of the image to pooling size (7x7)
-            section = tf.image.crop_to_bounding_box(img, y, x, h+1, w+1)  # TODO: Axis order might be backwards
-            rs = tf.image.resize_images(section, self.pool_size)  # TODO: This doesn't seem to be max pooling...
+            section = img[:, y_min:y_max+1, x_min:x_max+1, :]  # TODO: Axis order might be backwards
+            rs = tf.image.resize_images(section, self.pool_size, method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)  # TODO: This doesn't seem to be max pooling...
             return rs
 
         final_output = tf.map_fn(
             fn=roi_cords_to_pooled,
-            elems=rois_norm
+            elems=rois
         )
         final_output = final_output[0, :, :, :, :]  # TODO: Might be keeping the wrong axis
         tf.print()
@@ -57,8 +54,7 @@ class RoiPoolingConv(Layer):
         return final_output
 
     def get_config(self):
-        config = {'pool_size': self.pool_size,
-                  'num_rois': self.num_rois}
+        config = {'pool_size': self.pool_size}
         base_config = super(RoiPoolingConv, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -129,10 +125,10 @@ def ROI_Pool_TF(img, rois, pool_size=(7, 7), scale_factor=(1/16)):
     rois_norm = K.cast(rois * scale_factor, 'int32')
     rois_norm = K.cast(rois_norm, 'float32')
     def roi_cords_to_pooled(roi):
-        x = K.cast(roi[0], 'int32')
-        y = K.cast(roi[1], 'int32')
-        w = K.cast(roi[2], 'int32') - x
-        h = K.cast(roi[3], 'int32') - y
+        x = K.cast(roi[1], 'int32')
+        y = K.cast(roi[2], 'int32')
+        w = K.cast(roi[3], 'int32') - x
+        h = K.cast(roi[4], 'int32') - y
 
         # Resized roi of the image to pooling size (7x7)
         section = tf.image.crop_to_bounding_box(img, y, x, h+1, w+1)  # TODO: Axis order might be backwards
@@ -150,9 +146,6 @@ def ROI_Pool_TF(img, rois, pool_size=(7, 7), scale_factor=(1/16)):
 def ROI_Pool_For_Lambda(pool_size=(7, 7), scale_factor=(1/16)):
     pass
 
-
-
-
 def make_deng_tf_stucture():
     sess = K.get_session()
     #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
@@ -164,8 +157,8 @@ def make_deng_tf_stucture():
     rois = Input(shape=(5,), name='rois')
     rois_context = Input(shape=(5,), name='rois_context')
 
-    bn_conv5_3 = VGG_16_RGB(img)
-    bn_conv5_3d = VGG_16_D(dmap)
+    conv5_3 = VGG_16_RGB(img)
+    conv5_3d = VGG_16_D(dmap)
 
 
     pooling_regions = 7 #Commonly set as 7
@@ -177,42 +170,22 @@ def make_deng_tf_stucture():
         pool_size=(7, 7),
         scale_factor=(1 / 16),
         name="pool5"
-    )([bn_conv5_3, rois])
+    )([conv5_3, rois])
     pool5_context = RoiPoolingConv(
         pool_size=(7, 7),
         scale_factor=(1 / 16),
         name="pool5_context"
-    )([bn_conv5_3, rois_context])
+    )([conv5_3, rois_context])
     pool5d = RoiPoolingConv(
         pool_size=(7, 7),
         scale_factor=(1 / 16),
         name="pool5d"
-    )([bn_conv5_3d, rois])
+    )([conv5_3d, rois])
     pool5d_context = RoiPoolingConv(
         pool_size=(7, 7),
         scale_factor=(1 / 16),
         name="pool5d_context"
-    )([bn_conv5_3d, rois_context])
-    """pool5 = RoiPoolingConv(
-        pooling_regions,
-        num_rois,
-        name="pool5"
-    )([bn_conv5_3, rois])
-    pool5_context = RoiPoolingConv(
-        pooling_regions,
-        num_rois,
-        name="pool5_context"
-    )([bn_conv5_3, rois_context])
-    pool5d = RoiPoolingConv(
-        pooling_regions,
-        num_rois,
-        name="pool5d"
-    )([bn_conv5_3d, rois])
-    pool5d_context = RoiPoolingConv(
-        pooling_regions,
-        num_rois,
-        name="pool5d_context"
-    )([bn_conv5_3d, rois_context])"""
+    )([conv5_3d, rois_context])
 
     #### Flatten
     flatten = Flatten(name='flatten')(pool5)
