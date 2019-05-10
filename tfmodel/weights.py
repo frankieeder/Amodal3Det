@@ -17,15 +17,13 @@ def restructure_weights_bn(weights, layer):
     bn_w = h5_group_to_list(weights[layer])
     scale_factor = bn_w[2][0]
     scale_factor = 0 if scale_factor == 0 else 1 / scale_factor
-    mean = -scale_factor * bn_w[0]
+    mean = scale_factor * bn_w[0]
     std = scale_factor * bn_w[1]
-    return [mean, std][2:]
-
-def restructure_weights_sc(weights, layer):
-    sc_w = h5_group_to_list(weights[layer])
+    sc = 'sc' + layer[2:]
+    sc_w = h5_group_to_list(weights[sc])
     gamma = sc_w[0]
     beta = sc_w[1]
-    return [gamma, beta]
+    return [gamma, beta, mean, std]
 
 
 def restructure_weights_flip0(weights, layer):
@@ -46,9 +44,6 @@ def load_weights(model, weights_path):
             elif layer.name[:2] == 'bn' and "conv" in layer.name:
                 these_weights = restructure_weights_bn(w, layer.name)
                 layer.set_weights(these_weights)
-            elif layer.name[:2] == 'sc' and "conv" in layer.name:
-                these_weights = restructure_weights_sc(w, layer.name)
-                layer.set_weights(these_weights)
             elif layer.name == "fc7":
                 layer.set_weights(h5_group_to_list(w[layer.name]))
             elif layer.name in ["fc6", "cls_score", "bbox_pred_3d"]:
@@ -60,4 +55,3 @@ def load_weights(model, weights_path):
             unloaded.append(layer.name)
     print(unloaded)
     return model
-

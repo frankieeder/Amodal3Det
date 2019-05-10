@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from keras.layers import Flatten, Dense, Dropout, Input, Concatenate, Conv2D, MaxPooling2D, ZeroPadding2D, Lambda, BatchNormalization
+from keras.layers import Flatten, Dense, Dropout, Input, Concatenate, Conv2D, MaxPooling2D, ZeroPadding2D, Lambda, BatchNormalization, Activation
 from keras.models import Model
 from keras.utils import plot_model
 from keras.utils.conv_utils import convert_kernel
@@ -10,41 +10,6 @@ from keras.engine.topology import Layer
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
-class Scale(Layer):
-    '''Learns a set of weights and biases used for scaling the input data.
-    '''
-    def __init__(self, weights=None, axis=-1, momentum=0.9, beta_init='zero', gamma_init='one', **kwargs):
-        self.momentum = momentum
-        self.axis = axis
-        self.beta_init = beta_init
-        self.gamma_init = gamma_init
-        self.initial_weights = weights
-        super(Scale, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.input_spec = [tf.InputSpec(shape=input_shape)]
-        shape = (int(input_shape[self.axis]),)
-
-        self.gamma = self.gamma_init(shape, name='{}_gamma'.format(self.name))
-        self.beta = self.beta_init(shape, name='{}_beta'.format(self.name))
-        self.trainable_weights = [self.gamma, self.beta]
-
-        if self.initial_weights is not None:
-            self.set_weights(self.initial_weights)
-            del self.initial_weights
-
-    def call(self, x, mask=None):
-        input_shape = self.input_spec[0].shape
-        broadcast_shape = [1] * len(input_shape)
-        broadcast_shape[self.axis] = input_shape[self.axis]
-
-        out = K.reshape(self.gamma, broadcast_shape) * x + K.reshape(self.beta, broadcast_shape)
-        return out
-
-    def get_config(self):
-        config = {"momentum": self.momentum, "axis": self.axis}
-        base_config = super(Scale, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
 
 class RoiPoolingConv(Layer):
     def __init__(self, pool_size, scale_factor=1.0, **kwargs):
@@ -97,120 +62,48 @@ class RoiPoolingConv(Layer):
         base_config = super(RoiPoolingConv, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
+def VGG_16_Conv(num_convs, input_tensor, suffix=''):
+    padding = ZeroPadding2D(padding=(1, 1), input_shape=(224, 224, 3), name='padding' + suffix)(input_tensor)
+    conv = Conv2D(num_convs, (3, 3), activation='relu', name='conv' + suffix)(padding)
+    return conv
 
+def VGG_16_Conv_BN(num_layers, input_tensor, suffix=''):
+    padding3_1 = ZeroPadding2D((1, 1), name='padding' + suffix)(input_tensor)
+    conv3_1 = Conv2D(num_layers, (3, 3), name='conv' + suffix)(padding3_1)
+    bn_conv3_1 = BatchNormalization(epsilon=0.00001, name='bn_conv' + suffix)(conv3_1)
+    relu_conv3_1 = Activation('relu', name="relu_conv" + suffix)(bn_conv3_1)
+    return relu_conv3_1
+
+def VGG_16(img, suffix):
+    conv1_1 = VGG_16_Conv(64, img, "1_1" + suffix)
+    conv1_2 = VGG_16_Conv(64, conv1_1, "1_2" + suffix)
+    pool1 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool1' + suffix)(conv1_2)
+
+    conv2_1 = VGG_16_Conv(128, pool1, "2_1" + suffix)
+    conv2_2 = VGG_16_Conv(128, conv2_1, "2_2" + suffix)
+    pool2 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool2' + suffix)(conv2_2)
+
+    conv3_1 = VGG_16_Conv_BN(256, pool2, "3_1" + suffix)
+    conv3_2 = VGG_16_Conv_BN(256, conv3_1, "3_2" + suffix)
+    conv3_3 = VGG_16_Conv_BN(256, conv3_2, "3_3" + suffix)
+    pool3 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool3' + suffix)(conv3_3)
+
+    conv4_1 = VGG_16_Conv_BN(512, pool3, "4_1" + suffix)
+    conv4_2 = VGG_16_Conv_BN(512, conv4_1, "4_2" + suffix)
+    conv4_3 = VGG_16_Conv_BN(512, conv4_2, "4_3" + suffix)
+    pool4 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool4' + suffix)(conv4_3)
+
+    conv5_1 = VGG_16_Conv_BN(512, pool4, "5_1" + suffix)
+    conv5_2 = VGG_16_Conv_BN(512, conv5_1, "5_2" + suffix)
+    conv5_3 = VGG_16_Conv_BN(512, conv5_2, "5_3" + suffix)
+
+    return conv5_3
 
 def VGG_16_RGB(img):
-    padding1_1 = ZeroPadding2D(padding=(1, 1), input_shape=(224, 224, 3), name='padding1_1')(img)
-    conv1_1 = Conv2D(64, (3, 3), activation='relu', name='conv1_1')(padding1_1)
-    padding1_2 = ZeroPadding2D((1, 1), name='padding1_2')(conv1_1)
-    conv1_2 = Conv2D(64, (3, 3), activation='relu', name='conv1_2')(padding1_2)
-    pool1 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool1')(conv1_2)
-
-    padding2_1 = ZeroPadding2D((1, 1), name='padding2_1')(pool1)
-    conv2_1 = Conv2D(128, (3, 3), activation='relu', name='conv2_1')(padding2_1)
-    padding2_2 = ZeroPadding2D((1, 1), name='padding2_2')(conv2_1)
-    conv2_2 = Conv2D(128, (3, 3), activation='relu', name='conv2_2')(padding2_2)
-    pool2 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool2')(conv2_2)
-
-    padding3_1 = ZeroPadding2D((1, 1), name='padding3_1')(pool2)
-    conv3_1 = Conv2D(256, (3, 3), activation='relu', name='conv3_1')(padding3_1)
-    bn_conv3_1 = BatchNormalization( epsilon=0.00001, scale=False, center=False, name='bn_conv3_1')(conv3_1)
-    sc_conv3_1 = Scale(name='sc_conv3_1')(bn_conv3_1)
-    padding3_2 = ZeroPadding2D((1, 1), name='padding3_2')(sc_conv3_1)
-    conv3_2 = Conv2D(256, (3, 3), activation='relu', name='conv3_2')(padding3_2)
-    bn_conv3_2 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv3_2')(conv3_2)
-    sc_conv3_2 = Scale(name='sc_conv3_2')(bn_conv3_2)
-    padding3_3 = ZeroPadding2D((1, 1), name='padding3_3')(sc_conv3_2)
-    conv3_3 = Conv2D(256, (3, 3), activation='relu', name='conv3_3')(padding3_3)
-    bn_conv3_3 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv3_3')(conv3_3)
-    sc_conv3_3 = Scale(name='sc_conv3_3')(bn_conv3_3)
-    pool3 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool3')(sc_conv3_3)
-
-    padding4_1 = ZeroPadding2D((1, 1), name='padding4_1')(pool3)
-    conv4_1 = Conv2D(512, (3, 3), activation='relu', name='conv4_1')(padding4_1)
-    bn_conv4_1 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_1')(conv4_1)
-    sc_conv4_1 = Scale(name='sc_conv4_1')(bn_conv4_1)
-    padding4_2 = ZeroPadding2D((1, 1), name='padding4_2')(sc_conv4_1)
-    conv4_2 = Conv2D(512, (3, 3), activation='relu', name='conv4_2')(padding4_2)
-    bn_conv4_2 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_2')(conv4_2)
-    sc_conv4_2 = Scale(name='sc_conv4_2')(bn_conv4_2)
-    padding4_3 = ZeroPadding2D((1, 1), name='padding4_3')(sc_conv4_2)
-    conv4_3 = Conv2D(512, (3, 3), activation='relu', name='conv4_3')(padding4_3)
-    bn_conv4_3 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_3')(conv4_3)
-    sc_conv4_3 = Scale(name='sc_conv4_3')(bn_conv4_3)
-    pool4 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool4')(sc_conv4_3)
-
-    padding5_1 = ZeroPadding2D((1, 1), name='padding5_1')(pool4)
-    conv5_1 = Conv2D(512, (3, 3), activation='relu', name='conv5_1')(padding5_1)
-    bn_conv5_1 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_1')(conv5_1)
-    sc_conv5_1 = Scale(name='sc_conv5_1')(bn_conv5_1)
-    padding5_2 = ZeroPadding2D((1, 1), name='padding5_2')(sc_conv5_1)
-    conv5_2 = Conv2D(512, (3, 3), activation='relu', name='conv5_2')(padding5_2)
-    bn_conv5_2 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_2')(conv5_2)
-    sc_conv5_2 = Scale(name='sc_conv5_2')(bn_conv5_2)
-    padding5_3 = ZeroPadding2D((1, 1), name='padding5_3')(sc_conv5_2)
-    conv5_3 = Conv2D(512, (3, 3), activation='relu', name='conv5_3')(padding5_3)
-    bn_conv5_3 = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_3')(conv5_3)
-    sc_conv5_3 = Scale(name='sc_conv5_3')(bn_conv5_3)
-
-    return sc_conv5_3
-
+    return VGG_16(img, "")
 
 def VGG_16_D(dmap):
-    padding1_1d = ZeroPadding2D(padding=(1, 1), input_shape=(224, 224, 3), name='padding1_1d')(dmap)
-    conv1_1d = Conv2D(64, (3, 3), activation='relu', name='conv1_1d')(padding1_1d)
-    padding1_2d = ZeroPadding2D((1, 1), name='padding1_2d')(conv1_1d)
-    conv1_2d = Conv2D(64, (3, 3), activation='relu', name='conv1_2d')(padding1_2d)
-    pool1d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool1d')(conv1_2d)
-
-    padding2_1d = ZeroPadding2D((1, 1), name='padding2_1d')(pool1d)
-    conv2_1d = Conv2D(128, (3, 3), activation='relu', name='conv2_1d')(padding2_1d)
-    padding2_2d = ZeroPadding2D((1, 1), name='padding2_2d')(conv2_1d)
-    conv2_2d = Conv2D(128, (3, 3), activation='relu', name='conv2_2d')(padding2_2d)
-    pool2d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool2d')(conv2_2d)
-
-    padding3_1d = ZeroPadding2D((1, 1), name='padding3_1d')(pool2d)
-    conv3_1d = Conv2D(256, (3, 3), activation='relu', name='conv3_1d')(padding3_1d)
-    bn_conv3_1d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv3_1d')(conv3_1d)
-    sc_conv3_1d = Scale(name='sc_conv3_1d')(bn_conv3_1d)
-    padding3_2d = ZeroPadding2D((1, 1), name='padding3_2d')(sc_conv3_1d)
-    conv3_2d = Conv2D(256, (3, 3), activation='relu', name='conv3_2d')(padding3_2d)
-    bn_conv3_2d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv3_2d')(conv3_2d)
-    sc_conv3_2d = Scale(name='sc_conv3_2d')(bn_conv3_2d)
-    padding3_3d = ZeroPadding2D((1, 1), name='padding3_3d')(sc_conv3_2d)
-    conv3_3d = Conv2D(256, (3, 3), activation='relu', name='conv3_3d')(padding3_3d)
-    bn_conv3_3d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv3_3d')(conv3_3d)
-    sc_conv3_3d = Scale(name='sc_conv3_3d')(bn_conv3_3d)
-    pool3d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool3d')(sc_conv3_3d)
-
-    padding4_1d = ZeroPadding2D((1, 1), name='padding4_1d')(pool3d)
-    conv4_1d = Conv2D(512, (3, 3), activation='relu', name='conv4_1d')(padding4_1d)
-    bn_conv4_1d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_1d')(conv4_1d)
-    sc_conv4_1d = Scale(name='sc_conv4_1d')(bn_conv4_1d)
-    padding4_2d = ZeroPadding2D((1, 1), name='padding4_2d')(sc_conv4_1d)
-    conv4_2d = Conv2D(512, (3, 3), activation='relu', name='conv4_2d')(padding4_2d)
-    bn_conv4_2d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_2d')(conv4_2d)
-    sc_conv4_2d = Scale(name='sc_conv4_2d')(bn_conv4_2d)
-    padding4_3d = ZeroPadding2D((1, 1), name='padding4_3d')(sc_conv4_2d)
-    conv4_3d = Conv2D(512, (3, 3), activation='relu', name='conv4_3d')(padding4_3d)
-    bn_conv4_3d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv4_3d')(conv4_3d)
-    sc_conv4_3d = Scale(name='sc_conv4_3d')(bn_conv4_3d)
-    pool4d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool4d')(sc_conv4_3d)
-
-    padding5_1d = ZeroPadding2D((1, 1), name='padding5_1d')(pool4d)
-    conv5_1d = Conv2D(512, (3, 3), activation='relu', name='conv5_1d')(padding5_1d)
-    bn_conv5_1d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_1d')(conv5_1d)
-    sc_conv5_1d = Scale(name='sc_conv5_1d')(bn_conv5_1d)
-    padding5_2d = ZeroPadding2D((1, 1), name='padding5_2d')(sc_conv5_1d)
-    conv5_2d = Conv2D(512, (3, 3), activation='relu', name='conv5_2d')(padding5_2d)
-    bn_conv5_2d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_2d')(conv5_2d)
-    sc_conv5_2d = Scale(name='sc_conv5_2d')(bn_conv5_2d)
-    padding5_3d = ZeroPadding2D((1, 1), name='padding5_3d')(sc_conv5_2d)
-    conv5_3d = Conv2D(512, (3, 3), activation='relu', name='conv5_3d')(padding5_3d)
-    bn_conv5_3d = BatchNormalization( epsilon=0.00001, scale=False, center=False,  name='bn_conv5_3d')(conv5_3d)
-    sc_conv5_3d = Scale(name='sc_conv5_3d')(bn_conv5_3d)
-
-    return sc_conv5_3d
+    return VGG_16(dmap, "d")
 
 def ROI_Pool_Keras(**kwargs):
     return Lambda(lambda l: ROI_Pool_TF(*l), **kwargs)
@@ -391,7 +284,6 @@ def make_deng_tf_stucture():
             outputs=[cls_score, bbox_pred_3d]
         )
     return tf_model
-
 
 
 
