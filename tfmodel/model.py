@@ -71,13 +71,13 @@ def VGG_16_RGB(img):
     conv1_1 = Conv2D(64, (3, 3), activation='relu', name='conv1_1')(padding1_1)
     padding1_2 = ZeroPadding2D((1, 1), name='padding1_2')(conv1_1)
     conv1_2 = Conv2D(64, (3, 3), activation='relu', name='conv1_2')(padding1_2)
-    pool1 = MaxPooling2D((2, 2), strides=(2, 2), name='pool1')(conv1_2)
+    pool1 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool1')(conv1_2)
 
     padding2_1 = ZeroPadding2D((1, 1), name='padding2_1')(pool1)
     conv2_1 = Conv2D(128, (3, 3), activation='relu', name='conv2_1')(padding2_1)
     padding2_2 = ZeroPadding2D((1, 1), name='padding2_2')(conv2_1)
     conv2_2 = Conv2D(128, (3, 3), activation='relu', name='conv2_2')(padding2_2)
-    pool2 = MaxPooling2D((2, 2), strides=(2, 2), name='pool2')(conv2_2)
+    pool2 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool2')(conv2_2)
 
     padding3_1 = ZeroPadding2D((1, 1), name='padding3_1')(pool2)
     conv3_1 = Conv2D(256, (3, 3), activation='relu', name='conv3_1')(padding3_1)
@@ -88,7 +88,7 @@ def VGG_16_RGB(img):
     padding3_3 = ZeroPadding2D((1, 1), name='padding3_3')(bn_conv3_2)
     conv3_3 = Conv2D(256, (3, 3), activation='relu', name='conv3_3')(padding3_3)
     bn_conv3_3 = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv3_3')(conv3_3)
-    pool3 = MaxPooling2D((2, 2), strides=(2, 2), name='pool3')(bn_conv3_3)
+    pool3 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool3')(bn_conv3_3)
 
     padding4_1 = ZeroPadding2D((1, 1), name='padding4_1')(pool3)
     conv4_1 = Conv2D(512, (3, 3), activation='relu', name='conv4_1')(padding4_1)
@@ -99,7 +99,7 @@ def VGG_16_RGB(img):
     padding4_3 = ZeroPadding2D((1, 1), name='padding4_3')(bn_conv4_2)
     conv4_3 = Conv2D(512, (3, 3), activation='relu', name='conv4_3')(padding4_3)
     bn_conv4_3 = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv4_3')(conv4_3)
-    pool4 = MaxPooling2D((2, 2), strides=(2, 2), name='pool4')(bn_conv4_3)
+    pool4 = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool4')(bn_conv4_3)
 
     padding5_1 = ZeroPadding2D((1, 1), name='padding5_1')(pool4)
     conv5_1 = Conv2D(512, (3, 3), activation='relu', name='conv5_1')(padding5_1)
@@ -119,13 +119,13 @@ def VGG_16_D(dmap):
     conv1_1d = Conv2D(64, (3, 3), activation='relu', name='conv1_1d')(padding1_1d)
     padding1_2d = ZeroPadding2D((1, 1), name='padding1_2d')(conv1_1d)
     conv1_2d = Conv2D(64, (3, 3), activation='relu', name='conv1_2d')(padding1_2d)
-    pool1d = MaxPooling2D((2, 2), strides=(2, 2), name='pool1d')(conv1_2d)
+    pool1d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool1d')(conv1_2d)
 
     padding2_1d = ZeroPadding2D((1, 1), name='padding2_1d')(pool1d)
     conv2_1d = Conv2D(128, (3, 3), activation='relu', name='conv2_1d')(padding2_1d)
     padding2_2d = ZeroPadding2D((1, 1), name='padding2_2d')(conv2_1d)
     conv2_2d = Conv2D(128, (3, 3), activation='relu', name='conv2_2d')(padding2_2d)
-    pool2d = MaxPooling2D((2, 2), strides=(2, 2), name='pool2d')(conv2_2d)
+    pool2d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool2d')(conv2_2d)
 
     padding3_1d = ZeroPadding2D((1, 1), name='padding3_1d')(pool2d)
     conv3_1d = Conv2D(256, (3, 3), activation='relu', name='conv3_1d')(padding3_1d)
@@ -136,7 +136,7 @@ def VGG_16_D(dmap):
     padding3_3d = ZeroPadding2D((1, 1), name='padding3_3d')(bn_conv3_2d)
     conv3_3d = Conv2D(256, (3, 3), activation='relu', name='conv3_3d')(padding3_3d)
     bn_conv3_3d = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv3_3d')(conv3_3d)
-    pool3d = MaxPooling2D((2, 2), strides=(2, 2), name='pool3d')(bn_conv3_3d)
+    pool3d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool3d')(bn_conv3_3d)
 
     padding4_1d = ZeroPadding2D((1, 1), name='padding4_1d')(pool3d)
     conv4_1d = Conv2D(512, (3, 3), activation='relu', name='conv4_1d')(padding4_1d)
@@ -147,7 +147,7 @@ def VGG_16_D(dmap):
     padding4_3d = ZeroPadding2D((1, 1), name='padding4_3d')(bn_conv4_2d)
     conv4_3d = Conv2D(512, (3, 3), activation='relu', name='conv4_3d')(padding4_3d)
     bn_conv4_3d = BatchNormalization(epsilon=0, center=True, scale=True, name='bn_conv4_3d')(conv4_3d)
-    pool4d = MaxPooling2D((2, 2), strides=(2, 2), name='pool4d')(bn_conv4_3d)
+    pool4d = MaxPooling2D((2, 2), strides=(2, 2), padding='same', name='pool4d')(bn_conv4_3d)
 
     padding5_1d = ZeroPadding2D((1, 1), name='padding5_1d')(pool4d)
     conv5_1d = Conv2D(512, (3, 3), activation='relu', name='conv5_1d')(padding5_1d)
