@@ -47,7 +47,7 @@ class RoiPoolingConv(Layer):
             elems=rois
         )
         final_output = final_output[0, :, :, :, :]  # TODO: Might be keeping the wrong axis
-        tf.print()
+        final_output = tf.transpose(final_output, (0, 3, 1, 2))
         final_output = K.cast(final_output, 'float32')
 
         #final_output = K.constant(0.0, shape=self.pool_size + (self.nb_channels,))  # Null output for testing
