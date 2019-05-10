@@ -28,7 +28,7 @@ def restructure_weights_bn(weights, layer):
 
 def restructure_weights_flip0(weights, layer):
     w = h5_group_to_list(weights[layer])
-    w[0] = np.swapaxes(w[0], 0, 1)
+    w[0] = w[0].T
     return w
 
 def load_weights(model, weights_path):
@@ -44,9 +44,7 @@ def load_weights(model, weights_path):
             elif layer.name[:2] == 'bn' and "conv" in layer.name:
                 these_weights = restructure_weights_bn(w, layer.name)
                 layer.set_weights(these_weights)
-            elif layer.name == "fc7":
-                layer.set_weights(h5_group_to_list(w[layer.name]))
-            elif layer.name in ["fc6", "cls_score", "bbox_pred_3d"]:
+            elif layer.name in ["fc6", 'fc7', "cls_score", "bbox_pred_3d"]:
                 these_weights = restructure_weights_flip0(w, layer.name)
                 layer.set_weights(these_weights)
             else:

@@ -67,7 +67,7 @@ def VGG_16_Conv_BN(num_layers, input_tensor, suffix=''):
     padding3_1 = ZeroPadding2D((1, 1), name='padding' + suffix)(input_tensor)
     conv3_1 = Conv2D(num_layers, (3, 3), name='conv' + suffix)(padding3_1)
     bn_conv3_1 = BatchNormalization(epsilon=0.00001, name='bn_conv' + suffix)(conv3_1)
-    relu_conv3_1 = Activation('relu', name="relu_conv" + suffix)(bn_conv3_1)
+    relu_conv3_1 = Activation('relu', name="relu" + suffix)(bn_conv3_1)
     return relu_conv3_1
 
 def VGG_16(img, suffix):
@@ -205,8 +205,8 @@ def make_deng_tf_stucture():
     fc6 = Dense(
         units=4096,
         activation='relu',
-        kernel_initializer='glorot_normal',
-        bias_initializer='constant',
+        #kernel_initializer='glorot_normal',
+        #bias_initializer='constant',
         name='fc6'
     )(roi_pool_rgbd) # TODO: Do we need the learning parameters here?
     # No since we are just training right?
@@ -214,8 +214,8 @@ def make_deng_tf_stucture():
     fc7 = Dense(
         units=4096,
         activation='relu',
-        kernel_initializer='glorot_normal',
-        bias_initializer='constant',
+        #kernel_initializer='glorot_normal',
+        #bias_initializer='constant',
         name='fc7'
     )(fc6) # TODO: Do we need the learning parameters here?
     # TODO: What to the dropout layers to here?
