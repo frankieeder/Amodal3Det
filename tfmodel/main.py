@@ -5,7 +5,6 @@ import weights
 import test
 
 def get_tf_implementation(cache_file, weights_path, all_layer_outs=False):
-    # Define Model Structure
     print("Making Structure")
     tf_model = model.make_deng_tf_test(verbose=True, all_layer_outs=all_layer_outs)
     print("Loading Weights")

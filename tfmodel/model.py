@@ -194,7 +194,7 @@ def make_deng_tf_test(verbose=False, all_layer_outs=False):
     tf_model = make_deng_tf_stucture(verbose)
     if all_layer_outs:
         all_layers = [layer for layer in tf_model.layers if
-                      not any(n in layer.name for n in ['img', 'dmap', 'rois', 'rois_context'])]
+                      not any(n in layer.name for n in ['img', 'dmap', 'rois', 'rois_context', 'padding'])]
         all_outs = [l.output for l in all_layers]
         tf_model = Model(
             inputs=tf_model.inputs,

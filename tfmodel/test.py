@@ -173,32 +173,9 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
         blobs['rois_context'] = blobs['rois_context'][index, :]
 
     # reshape network inputs
-    # print(model.get_layer('img').input_shape)
-    # print(model.get_layer('dmap').input_shape)
-    # print(model.get_layer('rois').input_shape)
-    # print(model.get_layer('rois_context').input_shape)
 
-    # im_t = blobs['img']
     blobs['img'] = np.moveaxis(blobs['img'], 1, 3)
-    # im_t = cv2.resize(
-    #    src=im_t,
-    #    dsize=(224, 224)
-    # )
-    # blobs['img'] = np.expand_dims(im_t, 0)
-    print(blobs['img'].shape)
-
-    dmap_t = blobs['dmap']
     blobs['dmap'] = np.moveaxis(blobs['dmap'], 1, 3)
-    # dmap_t = cv2.resize(
-    #    src=dmap_t,
-    #    dsize=(224, 224)
-    # )
-    # blobs['dmap'] = np.expand_dims(dmap_t, 0)
-
-    # model.blobs['img'].reshape(*(blobs['img'].shape))
-    # model.blobs['dmap'].reshape(*(blobs['dmap'].shape))
-    # model.blobs['rois'].reshape(*(blobs['rois'].shape))
-    # model.blobs['rois_context'].reshape(*(blobs['rois_context'].shape))
 
     # forward pass for predictions
     im_in = blobs['img'].astype(np.float32, copy=False)
@@ -206,13 +183,12 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-    test_results_pkl = 'null.pickle'  # Use this if you want to test a set of raw model predictions to completion.
+    test_results_pkl = 'outs01.pkl'  # Use this if you want to test a set of raw model predictions to completion.
     if os.path.isfile(test_results_pkl):
         with open(test_results_pkl, 'rb') as handle:
             outs = pickle.load(handle)
     else:
         _subtimer = Timer()
-        outs = []
         c = 0
         for roi, roi_context in zip(rois, rois_context):
             ins = [im_in, dmap_in, np.array([roi]), np.array([roi_context])]
@@ -220,7 +196,11 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
             _subtimer.tic()
             blobs_out = model.predict(ins)
             _subtimer.toc()
-            outs.append(blobs_out)
+            for val, out_tensor in zip(blobs_out, model.outputs):
+                name = out_tensor.op.name
+                name = name[:name.find("/")]
+                file_out = f"output/ROI_{c}_{name}.pkl"
+                np.save(file_out, val)
             print(f"This Iteration Test Time: {_subtimer.average_time}")
             c += 1
 
@@ -242,12 +222,12 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
         pred_boxes = pred_boxes[inv_index, :]
         pred_boxes_3d = pred_boxes_3d[inv_index, :]
 
-    return scores, pred_boxes, pred_boxes_3d
+    return scores, pred_boxes, pred_boxes_3d, blobs_out
 
 
 def test_net(net, roidb):
     """Test a network on an image database."""
-    #roidb = roidb[1:]
+    roidb = roidb[:1]
     num_images = len(roidb)
     num_classes = len(cfg.classes)
     # heuristic: keep an average of 40 detections per class per images prior
@@ -279,7 +259,7 @@ def test_net(net, roidb):
         dmap = tmp['dmap_f']
 
         _t['im_detect'].tic()
-        scores, boxes, boxes_3d = \
+        scores, boxes, boxes_3d, _ = \
             im_detect_3d(net, im, dmap, roidb[i]['boxes'], roidb[i]['boxes_3d'], roidb[i]['rois_context'])
         _t['im_detect'].toc()
 
