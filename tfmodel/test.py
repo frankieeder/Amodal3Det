@@ -212,12 +212,17 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
             outs = pickle.load(handle)
     else:
         _subtimer = Timer()
-        ins = [im_in, dmap_in, rois, rois_context]
-        _subtimer.tic()
-        blobs_out = model.predict(ins)
-        _subtimer.toc()
-        print(f"This Iteration Test Time: {_subtimer.average_time}")
-        pass
+        outs = []
+        c = 0
+        for roi, roi_context in zip(rois, rois_context):
+            ins = [im_in, dmap_in, np.array([roi]), np.array([roi_context])]
+            print(f"Testing iteration {c}")
+            _subtimer.tic()
+            blobs_out = model.predict(ins)
+            _subtimer.toc()
+            outs.append(blobs_out)
+            print(f"This Iteration Test Time: {_subtimer.average_time}")
+            c += 1
 
     # use softmax estimated probabilities
     scores = np.concatenate([b[0] for b in outs])

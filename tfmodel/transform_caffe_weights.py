@@ -10,4 +10,4 @@ for name, mat in data.items():
     print("Saving " + name)
     np.save("layer_wise_outs0/" + name + ".npy", mat)
 
-x = 2
+pass

@@ -31,13 +31,14 @@ def restructure_weights_flip0(weights, layer):
     w[0] = w[0].T
     return w
 
-def load_weights(model, weights_path):
+def load_weights(model, weights_path, verbose=False):
     weights = h5py.File(weights_path, 'r')
     w = weights['data']
     unloaded = []
     for layer in model.layers:
         if layer.name in list(weights['data']):
-            print(f"loading {layer.name}")
+            if verbose:
+                print(f"loading {layer.name}")
             if layer.name[:4] == 'conv' and "conv" in layer.name:  # Load Normal Conv Weights
                 these_weights = restructure_weights_conv(w, layer.name)
                 layer.set_weights(these_weights)
@@ -51,5 +52,6 @@ def load_weights(model, weights_path):
                 unloaded.append(layer.name)
         else: # No data from Deng weights...
             unloaded.append(layer.name)
-    print(unloaded)
+    if verbose:
+        print(f"Layers with no data found: {unloaded}")
     return model
