@@ -26,27 +26,73 @@ class RoiPoolingConvSingle(Layer):
         assert (len(x) == 2)
         img = x[0]
         roi = x[1][0]  # Use only first ROI, tensorflow will discard the rest anyways
+        roi *= self.scale_factor
 
         #Misc. variables used in Caffe Implementation
-        channels_ = img.shape[3]  # TODO: Might not be right
-        pooled_height_ = self.pool_size[0] # TODO: pool size axis order might be wrong, but fine for our uses.
-        pooled_width_ = self.pool_size[1]
-        height_, width_ = img.shape #TODO: Might be wrong order here, will likely cause errors
+        pooled_height_, pooled_width_ = self.pool_size
+        batch_size_, height_, width_, channels_ = img.get_shape().as_list()  # TODO: Might be wrong order here, will likely cause errors
 
-        roi_start_w = K.cast(tf.math.round(roi[1]), 'int32') * self.scale_factor
-        roi_start_h = K.cast(tf.math.round(roi[2]), 'int32') * self.scale_factor
-        roi_end_w = K.cast(tf.math.round(roi[3]), 'int32') * self.scale_factor
-        roi_end_h = K.cast(tf.math.round(roi[4]), 'int32') * self.scale_factor
+        roi_start_w = tf.math.round(roi[1])
+        roi_start_h = tf.math.round(roi[2])
+        roi_end_w = tf.math.round(roi[3])
+        roi_end_h = tf.math.round(roi[4])
 
-        roi_height = tf.max(roi_end_h - roi_start_h + 1, 1)
-        roi_width = tf.max(roi_end_w - roi_start_w + 1, 1)
+        roi_height = tf.math.maximum(roi_end_h - roi_start_h + 1, 1)
+        roi_width = tf.math.maximum(roi_end_w - roi_start_w + 1, 1)
 
         bin_size_h = roi_height / pooled_height_
         bin_size_w = roi_width / pooled_width_
 
-        top_data = np.zeros((1, height_, width_, channels_))  # TODO: Is this the right shape?
-        argmax_data = {}
-        for c in range(channels_):
+        # TODO: Implement batch-wise processing to speed up testing time.
+        def c_ops(c):
+            def ph_ops(ph):
+                def pw_ops(pw):
+                    hstart = tf.floor(ph * bin_size_h)
+                    wstart = tf.floor(pw * bin_size_w)
+                    hend = tf.ceil((ph + 1) * bin_size_h)
+                    wend = tf.ceil((pw + 1) * bin_size_w)
+
+                    hstart = tf.math.minimum(tf.math.maximum(hstart + roi_start_h, 0), height_)
+                    hend = tf.math.minimum(tf.math.maximum(hend + roi_start_h, 0), height_)
+                    wstart = tf.math.minimum(tf.math.maximum(wstart + roi_start_w, 0), width_)
+                    wend = tf.math.minimum(tf.math.maximum(wend + roi_start_w, 0), width_)
+
+                    is_empty = tf.math.logical_or(tf.less_equal(hend, hstart), tf.less_equal(wend, wstart))
+                    # pool_index = ph * pooled_width_ + pw; TODO: is this the right axis order
+                    def max_section():
+                        hs = K.cast(hstart, "int32")
+                        he = K.cast(hend, "int32")
+                        ws = K.cast(wstart, "int32")
+                        we = K.cast(wend, "int32")
+                        channel = K.cast(c, "int32")
+                        section = img[0, hs:he, ws:we, channel]
+                        sec_max = tf.reduce_max(section)
+                        return sec_max
+                    result = tf.cond(  # If empty, return zero else max the image section
+                        is_empty,
+                        true_fn=lambda: tf.constant(0.0),
+                        false_fn=max_section
+                    )
+                    dest_h = K.cast(ph, "int32")
+                    dest_w = K.cast(pw, "int32")
+                    return result
+                return tf.map_fn(
+                    fn=pw_ops,
+                    elems=tf.range(pooled_width_, dtype='float32')
+                )
+            return tf.map_fn(
+                fn=ph_ops,
+                elems=tf.range(pooled_height_, dtype='float32')
+            )
+        top_data = tf.map_fn(
+            fn=c_ops,
+            elems=tf.range(channels_, dtype='float32')
+        )
+        final_output = K.cast(top_data, 'float32')
+        final_output = tf.expand_dims(final_output, 0)
+        return final_output
+        """Standard Pythonic reference code converted from Caffe ROIPoolingConv implementation."""
+        """for c in range(channels_):
             for ph in range(pooled_height_):
                 for pw in range(pooled_width_):
                     hstart = tf.floor(ph * bin_size_h)
@@ -63,16 +109,14 @@ class RoiPoolingConvSingle(Layer):
                     # pool_index = ph * pooled_width_ + pw; TODO: is this the right axis order
                     if is_empty:
                         top_data[0, ph, pw, c] = 0
-                        argmax_data[0, ph, pw, c] = -1
 
                     for h in range(hstart, hend):
                         for w in range(wstart, wend):
                             # index = h * width_ + w; [h, w]  TODO: is this the right axis order
                             if img[0, h, w, c] > top_data[0, ph, pw, c]:
-                                top_data[0, ph, pw, c] = img[0, h, w, c]
-                                argmax_data[(0, ph, pw, c)] = (0, h, w, c)
-        final_output = K.cast(top_data, 'float32')
-        return final_output
+                                top_data[0, ph, pw, c] = img[0, h, w, c]"""
+
+
 
     def get_config(self):
         config = {'pool_size': self.pool_size}
@@ -134,14 +178,11 @@ def ROIPoolingFun(pool_size, scale_factor=1.0):
     return ROIPooler
 
 def ROIPoolingConv(**kwargs):
-    ROIPoolingConv = Lambda(
-        function=ROIPoolingFun(
-            pool_size=(7, 7),
-            scale_factor=(1 / 16)
-        ),
+    return RoiPoolingConvSingle(
+        pool_size=(7, 7),
+        scale_factor=(1 / 16),
         **kwargs
     )
-    return ROIPoolingConv
 
 def VGG_16_Conv(num_convs, input_tensor, suffix=''):
     padding = ZeroPadding2D(padding=(1, 1), input_shape=(224, 224, 3), name='padding' + suffix)(input_tensor)
