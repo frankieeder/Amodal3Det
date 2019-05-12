@@ -1,10 +1,12 @@
 from keras.layers import Flatten, Dense, Dropout, Input, Concatenate, Conv2D, MaxPooling2D, ZeroPadding2D, \
-    BatchNormalization, Activation
+    BatchNormalization, Activation, Lambda
 from keras.models import Model
 from keras import backend as K
 from keras.engine.topology import Layer
 import tensorflow as tf
 from keras.utils import plot_model
+import numpy as np
+import math
 
 class RoiPoolingConvSingle(Layer):
     def __init__(self, pool_size, scale_factor=1.0, **kwargs):
@@ -23,27 +25,123 @@ class RoiPoolingConvSingle(Layer):
     def call(self, x, mask=None):
         assert (len(x) == 2)
         img = x[0]
-        roi = x[1]
+        roi = x[1][0]  # Use only first ROI, tensorflow will discard the rest anyways
 
-        roi *= self.scale_factor
-        x_min = K.cast(tf.math.round(roi[0, 1]), 'int32')
-        y_min = K.cast(tf.math.round(roi[0, 2]), 'int32')
-        x_max = K.cast(tf.math.round(roi[0, 3]), 'int32')
-        y_max = K.cast(tf.math.round(roi[0, 4]), 'int32')
+        #Misc. variables used in Caffe Implementation
+        channels_ = img.shape[3]  # TODO: Might not be right
+        pooled_height_ = self.pool_size[0] # TODO: pool size axis order might be wrong, but fine for our uses.
+        pooled_width_ = self.pool_size[1]
+        height_, width_ = img.shape #TODO: Might be wrong order here, will likely cause errors
 
-        section = img[:, y_min:y_max+1, x_min:x_max+1, :]
-        # TODO: This doesn't seem to be max pooling...
-        rs = tf.image.resize_images(section, self.pool_size, method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        roi_start_w = K.cast(tf.math.round(roi[1]), 'int32') * self.scale_factor
+        roi_start_h = K.cast(tf.math.round(roi[2]), 'int32') * self.scale_factor
+        roi_end_w = K.cast(tf.math.round(roi[3]), 'int32') * self.scale_factor
+        roi_end_h = K.cast(tf.math.round(roi[4]), 'int32') * self.scale_factor
 
-        #rs = rs[0, :, :, :, :]
-        rs = tf.transpose(rs, (0, 3, 1, 2))
-        final_output = K.cast(rs, 'float32')
+        roi_height = tf.max(roi_end_h - roi_start_h + 1, 1)
+        roi_width = tf.max(roi_end_w - roi_start_w + 1, 1)
+
+        bin_size_h = roi_height / pooled_height_
+        bin_size_w = roi_width / pooled_width_
+
+        top_data = np.zeros((1, height_, width_, channels_))  # TODO: Is this the right shape?
+        argmax_data = {}
+        for c in range(channels_):
+            for ph in range(pooled_height_):
+                for pw in range(pooled_width_):
+                    hstart = tf.floor(ph * bin_size_h)
+                    wstart = tf.floor(pw * bin_size_w)
+                    hend = tf.ceil((ph + 1) * bin_size_h)
+                    wend = tf.ceil((pw + 1) * bin_size_w)
+
+                    hstart = tf.min(tf.max(hstart + roi_start_h, 0), height_)
+                    hend = tf.min(tf.max(hend + roi_start_h, 0), height_)
+                    wstart = tf.min(tf.max(wstart + roi_start_w, 0), width_)
+                    wend = tf.min(tf.max(wend + roi_start_w, 0), width_)
+
+                    is_empty = (hend <= hstart) or (wend <= wstart)
+                    # pool_index = ph * pooled_width_ + pw; TODO: is this the right axis order
+                    if is_empty:
+                        top_data[0, ph, pw, c] = 0
+                        argmax_data[0, ph, pw, c] = -1
+
+                    for h in range(hstart, hend):
+                        for w in range(wstart, wend):
+                            # index = h * width_ + w; [h, w]  TODO: is this the right axis order
+                            if img[0, h, w, c] > top_data[0, ph, pw, c]:
+                                top_data[0, ph, pw, c] = img[0, h, w, c]
+                                argmax_data[(0, ph, pw, c)] = (0, h, w, c)
+        final_output = K.cast(top_data, 'float32')
         return final_output
 
     def get_config(self):
         config = {'pool_size': self.pool_size}
         base_config = super(RoiPoolingConvSingle, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+def ROIPoolingFun(pool_size, scale_factor=1.0):
+    def ROIPooler(x):
+        assert (len(x) == 2)
+        img = x[0]
+        roi = x[1][0]  # Use only first ROI, tensorflow will discard the rest anyways
+
+        # Misc. variables used in Caffe Implementation
+        channels_ = img.shape[3]  # TODO: Might not be right
+        pooled_height_ = pool_size[0]  # TODO: pool size axis order might be wrong, but fine for our uses.
+        pooled_width_ = pool_size[1]
+        _, height_, width_, _ = img.shape  # TODO: Might be wrong order here, will likely cause errors
+
+        roi_start_w = round(roi[1]) * scale_factor
+        roi_start_h = round(roi[2]) * scale_factor
+        roi_end_w = round(roi[3]) * scale_factor
+        roi_end_h = round(roi[4]) * scale_factor
+
+        roi_height = max(roi_end_h - roi_start_h + 1, 1)
+        roi_width = max(roi_end_w - roi_start_w + 1, 1)
+
+        bin_size_h = roi_height / pooled_height_
+        bin_size_w = roi_width / pooled_width_
+
+        top_data = np.zeros((1, height_, width_, channels_))  # TODO: Is this the right shape?
+        argmax_data = {}
+        for c in range(channels_):
+            for ph in range(pooled_height_):
+                for pw in range(pooled_width_):
+                    hstart = math.floor(ph * bin_size_h)
+                    wstart = math.floor(pw * bin_size_w)
+                    hend = math.ceil((ph + 1) * bin_size_h)
+                    wend = math.ceil((pw + 1) * bin_size_w)
+
+                    hstart = min(max(hstart + roi_start_h, 0), height_)
+                    hend = min(max(hend + roi_start_h, 0), height_)
+                    wstart = min(max(wstart + roi_start_w, 0), width_)
+                    wend = min(max(wend + roi_start_w, 0), width_)
+
+                    is_empty = (hend <= hstart) or (wend <= wstart)
+                    # pool_index = ph * pooled_width_ + pw; TODO: is this the right axis order
+                    if is_empty:
+                        top_data[0, ph, pw, c] = 0
+                        argmax_data[0, ph, pw, c] = -1
+
+                    for h in range(hstart, hend):
+                        for w in range(wstart, wend):
+                            # index = h * width_ + w; [h, w]  TODO: is this the right axis order
+                            if img[0, h, w, c] > top_data[0, ph, pw, c]:
+                                top_data[0, ph, pw, c] = img[0, h, w, c]
+                                argmax_data[(0, ph, pw, c)] = (0, h, w, c)
+        final_output = K.cast(top_data, 'float32')
+        return final_output
+    return ROIPooler
+
+def ROIPoolingConv(**kwargs):
+    ROIPoolingConv = Lambda(
+        function=ROIPoolingFun(
+            pool_size=(7, 7),
+            scale_factor=(1 / 16)
+        ),
+        **kwargs
+    )
+    return ROIPoolingConv
 
 def VGG_16_Conv(num_convs, input_tensor, suffix=''):
     padding = ZeroPadding2D(padding=(1, 1), input_shape=(224, 224, 3), name='padding' + suffix)(input_tensor)
@@ -108,26 +206,10 @@ def make_deng_tf_stucture(verbose=False):
     #### ROI Pooling
     if verbose:
         print("Defining ROI Pooling layers...")
-    pool5 = RoiPoolingConvSingle(
-        pool_size=(7, 7),
-        scale_factor=(1 / 16),
-        name="pool5"
-    )([conv5_3, rois])
-    pool5_context = RoiPoolingConvSingle(
-        pool_size=(7, 7),
-        scale_factor=(1 / 16),
-        name="pool5_context"
-    )([conv5_3, rois_context])
-    pool5d = RoiPoolingConvSingle(
-        pool_size=(7, 7),
-        scale_factor=(1 / 16),
-        name="pool5d"
-    )([conv5_3d, rois])
-    pool5d_context = RoiPoolingConvSingle(
-        pool_size=(7, 7),
-        scale_factor=(1 / 16),
-        name="pool5d_context"
-    )([conv5_3d, rois_context])
+    pool5 = ROIPoolingConv(name="pool5")([conv5_3, rois])
+    pool5_context = ROIPoolingConv(name="pool5_context")([conv5_3, rois_context])
+    pool5d = ROIPoolingConv(name="pool5d")([conv5_3d, rois])
+    pool5d_context = ROIPoolingConv(name="pool5d_context")([conv5_3d, rois_context])
 
     ## Flatten
     if verbose:
