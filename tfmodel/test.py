@@ -200,10 +200,8 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context, debug=True):
             if name not in outs:
                 outs[name] = val
             else:
-                if name in post_roi_layers:  # TODO: Pre-ROI Pooling layers don't need to be saved repeatedly
+                if name in post_roi_layers:
                     outs[name] = np.concatenate([outs[name], val])
-        if c > 20:
-            break
         c += 1
 
     out_dir = 'output/tf_layer_wise_outs0/'
@@ -213,6 +211,7 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context, debug=True):
 
     scores, pred_boxes, pred_boxes_3d = None, None, None
     if not debug:
+        #  TODO: Fix this for end to end usage
         """ Apply bounding-box regression deltas """
         # use softmax estimated probabilities
         scores = layers['cls_score']

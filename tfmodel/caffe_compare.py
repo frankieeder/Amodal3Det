@@ -19,7 +19,7 @@ def collapse_pickled_results(pickles_dir):
     with open('outs0.pkl', 'wb') as fid:
         pickle.dump(results, fid)
 
-generate_results = True
+generate_results = False
 if generate_results:
     tf_model = test_tf_implementation(
         cache_file="roidb_test_19_smol.pkl",
