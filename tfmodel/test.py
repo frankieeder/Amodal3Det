@@ -4,6 +4,7 @@ import cv2
 import scipy.io as sio
 import heapq
 from timer import Timer
+import re
 import pickle
 import os
 import keras.backend as K
@@ -142,8 +143,7 @@ def _bbox_pred_3d(bbox_3d, box_deltas_3d):
 
     return pred_boxes_3d
 
-
-def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
+def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context, debug=True):
     """  predict bbox and class scores
         bbox: N x 4 [xmin, ymin, xmax, ymax]
         bbox_3d : N x (n_cls * 7)
@@ -183,52 +183,59 @@ def im_detect_3d(model, im, dmap, boxes, boxes_3d, rois_context):
     rois = blobs['rois'].astype(np.float32, copy=False)
     rois_context = blobs['rois_context'].astype(np.float32, copy=False)
 
-    test_results_pkl = 'outs01.pkl'  # Use this if you want to test a set of raw model predictions to completion.
-    if os.path.isfile(test_results_pkl):
-        with open(test_results_pkl, 'rb') as handle:
-            outs = pickle.load(handle)
-    else:
-        _subtimer = Timer()
-        c = 0
-        for roi, roi_context in zip(rois, rois_context):
-            ins = [im_in, dmap_in, np.array([roi]), np.array([roi_context])]
-            print(f"Testing iteration {c}")
-            _subtimer.tic()
-            blobs_out = model.predict(ins)
-            _subtimer.toc()
-            for val, out_tensor in zip(blobs_out, model.outputs):
-                name = out_tensor.op.name
-                name = name[:name.find("/")]
-                file_out = f"output/ROI_{c}_{name}.pkl"
-                np.save(file_out, val)
-            print(f"This Iteration Test Time: {_subtimer.average_time}")
-            c += 1
+    layer_names = [l.op.name for l in model.outputs]
+    layer_names = [l[:l.find("/")] for l in layer_names]
+    subtimer = Timer()
+    outs = {}
+    c = 0
+    for roi, roi_context in zip(rois, rois_context):
+        ins = [im_in, dmap_in, np.array([roi]), np.array([roi_context])]
+        print(f"Testing ROI {c}")
+        subtimer.tic()
+        blobs_out = model.predict(ins)
+        subtimer.toc()
+        print("Storing Results")
+        post_roi_layers = set(layer_names[layer_names.index("pool5"):])
+        for name, val in zip(layer_names, blobs_out):
+            if name not in outs:
+                outs[name] = val
+            else:
+                if name in post_roi_layers:  # TODO: Pre-ROI Pooling layers don't need to be saved repeatedly
+                    outs[name] = np.concatenate([outs[name], val])
+        if c > 20:
+            break
+        c += 1
 
-    # use softmax estimated probabilities
-    scores = np.concatenate([b[0] for b in outs])
-
-    """ Apply bounding-box regression deltas """
-    # 3d boxes
-    box_deltas_3d = np.concatenate([b[1] for b in outs])
-    pred_boxes_3d = _bbox_pred_3d(boxes_3d, box_deltas_3d)
-
-    #  2d boxes
-    box_deltas = np.zeros((box_deltas_3d.shape[0], int(box_deltas_3d.shape[1] / 7 * 4)))
-    pred_boxes = _bbox_pred(boxes, box_deltas)
-
-    if cfg.DEDUP_BOXES > 0:
-        # Map scores and predictions back to the original set of boxes
-        scores = scores[inv_index, :]
-        pred_boxes = pred_boxes[inv_index, :]
-        pred_boxes_3d = pred_boxes_3d[inv_index, :]
-
-    return scores, pred_boxes, pred_boxes_3d, blobs_out
+    out_dir = 'output/tf_layer_wise_outs0/'
+    for name, value in outs.items():
+        np.save(out_dir + name, value)
 
 
-def test_net(net, roidb):
-    """Test a network on an image database."""
-    roidb = roidb[:1]
-    num_images = len(roidb)
+    scores, pred_boxes, pred_boxes_3d = None, None, None
+    if not debug:
+        """ Apply bounding-box regression deltas """
+        # use softmax estimated probabilities
+        scores = layers['cls_score']
+
+        # 3d boxes
+        box_deltas_3d = layers['bbox_pred_3d']
+        pred_boxes_3d = _bbox_pred_3d(boxes_3d, box_deltas_3d)
+
+        #  2d boxes
+        box_deltas = np.zeros((box_deltas_3d.shape[0], int(box_deltas_3d.shape[1] / 7 * 4)))
+        pred_boxes = _bbox_pred(boxes, box_deltas)
+
+        if cfg.DEDUP_BOXES > 0:
+            # Map scores and predictions back to the original set of boxes
+            scores = scores[inv_index, :]
+            pred_boxes = pred_boxes[inv_index, :]
+            pred_boxes_3d = pred_boxes_3d[inv_index, :]
+
+    return scores, pred_boxes, pred_boxes_3d, layers
+
+
+def misc_processing(results_list, _t):
+    num_images = len(results_list)
     num_classes = len(cfg.classes)
     # heuristic: keep an average of 40 detections per class per images prior
     # to NMS
@@ -246,23 +253,7 @@ def test_net(net, roidb):
     #    (x1, y1, x2, y2, score)
     all_boxes = [[[] for _ in range(num_images)]
                  for _ in range(num_classes)]
-
-    # timers
-    _t = {'im_detect': Timer(), 'misc': Timer()}
-
-    for i in range(num_images):
-        # load image
-        im = roidb[i]['image']
-
-        # load dmap
-        tmp = roidb[i]['dmap']
-        dmap = tmp['dmap_f']
-
-        _t['im_detect'].tic()
-        scores, boxes, boxes_3d, _ = \
-            im_detect_3d(net, im, dmap, roidb[i]['boxes'], roidb[i]['boxes_3d'], roidb[i]['rois_context'])
-        _t['im_detect'].toc()
-
+    for scores, boxes, boxes_3d, _ in results_list:
         _t['misc'].tic()
         # estimate threshold for each class
         for j in range(1, num_classes):
@@ -309,3 +300,31 @@ def test_net(net, roidb):
             obj_arr[i][j] = all_boxes[i][j]
 
     sio.savemat('output/all_boxes_cells_test.mat', {'all_boxes': obj_arr})
+
+def test_net(net, roidb, process_results_to_mat=False):
+    """Test a network on an image database."""
+    roidb = roidb[:1]  # TODO: Remove for full test
+
+    # timers
+    _t = {'im_detect': Timer(), 'misc': Timer()}
+    results = []
+    for test in roidb:
+        # load image
+        im = test['image']
+
+        # load dmap
+        tmp = test['dmap']
+        dmap = tmp['dmap_f']
+
+
+        #for box, box_3d, roi_context in zip(test['boxes'], test['boxes_3d'], test['rois_context']):
+        _t['im_detect'].tic()
+        result = \
+            im_detect_3d(net, im, dmap, test['boxes'], test['boxes_3d'], test['rois_context'])
+        _t['im_detect'].toc()
+        results.append(result)
+
+    if process_results_to_mat:
+        misc_processing(results, _t)
+
+    return results
