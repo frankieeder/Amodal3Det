@@ -1,3 +1,14 @@
+## Documentation
+This repository containts a re-implementation in Tensorflow of Deng et al's approach used in "Amodal Detection of 3D Objects: Inferring 3D Bounding Boxes from 2D Ones in RGB-Depth Images"
+
+Slides:
+https://docs.google.com/presentation/d/18EJWAZ90onmsTlhOMb76VrFumY50cNyLHIsopiih41A/edit#slide=id.g56eb6faf5d_0_38
+
+Paper:
+https://docs.google.com/document/d/1EC-AM8B99veG0Wf1moL0jlVG9KfAvJEW0KIl_xaeN-4/edit
+
+________________________________________________________________________________________________
+
 # Amodal Detection of 3D Objects: Inferring 3D Bounding Boxes from 2D Ones in RGB-Depth Images
 
 By [Zhuo Deng](http://www.dnnseye.com), [Longin Jan Latecki](https://cis.temple.edu/~latecki/) (Temple University).
